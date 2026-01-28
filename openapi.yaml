@@ -1,119 +1,115 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
-  title: SIDRA IBGE API PRO
-  version: "2.0.0"
+  title: ROBÔ SIDRA IBGE - CONSULTA PREMIUM
+  version: "5.6.0"
   description: |
-    API avançada para extração de dados do IBGE/SIDRA e geração de arquivos Excel.
-    FLUXO OBRIGATÓRIO PARA O GPT:
-    1. Buscar o ID do município (7 dígitos) via `/municipio/buscar`.
-    2. Listar temas via `/grupos` e tabelas via `/grupos/{id}/tabelas`.
-    3. Obter variáveis e períodos via `/metadados/{tabela_id}`.
-    4. Gerar o Excel com os IDs numéricos coletados.
-    5. SEMPRE exibir a 'download_url' como um link clicável para o usuário.
+    API para extração de dados do IBGE/SIDRA baseada na versão 5.6 do Robô Premium. 
+    Fluxo Obrigatório:
+    1. Listar Grupos Temáticos.
+    2. Listar Tabelas do Grupo (Exibindo ID e Nome).
+    3. Consultar Metadados (IDs de variáveis e classificações).
+    4. Buscar ID do Município (7 dígitos).
+    5. Gerar Excel e fornecer Link de Download.
 servers:
   - url: https://sidra-api.onrender.com
-    description: Servidor de Produção no Render
 paths:
   /municipio/buscar:
     get:
       operationId: buscarMunicipio
-      summary: Busca o código de 7 dígitos de um município pelo nome
+      [cite_start]summary: Busca o ID de 7 dígitos do município pelo nome [cite: 8, 23]
       parameters:
         - name: nome
           in: query
           required: true
-          description: Nome do município (ex: São Paulo)
+          [cite_start]description: Nome do município (ex: Belo Horizonte) [cite: 24]
           schema:
             type: string
       responses:
         "200":
-          description: Lista de municípios encontrados com ID e UF.
+          description: Lista de municípios com ID e UF.
   /grupos:
     get:
       operationId: listarGrupos
-      summary: Lista os grupos temáticos de análise (Saneamento, Renda, etc)
+      [cite_start]summary: Lista os 9 grupos de análise do robô [cite: 1, 17]
       responses:
         "200":
-          description: Dicionário de grupos.
+          description: Retorna os nomes dos grupos temáticos.
   /grupos/{grupo_id}/tabelas:
     get:
       operationId: listarTabelasGrupo
-      summary: Lista as tabelas disponíveis para um grupo específico
+      [cite_start]summary: Lista as tabelas disponíveis com seus respectivos IDs [cite: 18, 19]
       parameters:
         - name: grupo_id
           in: path
           required: true
+          [cite_start]description: ID do grupo escolhido (1 a 9) [cite: 17]
           schema:
             type: string
       responses:
         "200":
-          description: Lista de IDs e nomes de tabelas.
+          description: Lista estruturada de IDs e descrições de tabelas.
   /metadados/{tabela_id}:
     get:
       operationId: obterMetadados
-      summary: Retorna variáveis, períodos e classificações disponíveis na tabela
+      [cite_start]summary: Consulta anos, variáveis e classificações detalhadas [cite: 8, 19]
       parameters:
         - name: tabela_id
           in: path
           required: true
+          [cite_start]description: ID numérico da tabela (ex: 3218) [cite: 1]
           schema:
             type: string
       responses:
         "200":
-          description: Metadados estruturados para configurar a consulta.
+          [cite_start]description: Metadados completos para configuração da consulta[cite: 21, 22].
   /gerar_excel:
     get:
       operationId: gerarExcel
-      summary: Consulta o SIDRA e gera um arquivo .xlsx para download
+      [cite_start]summary: Executa o download dinâmico e gera o link do arquivo [cite: 9, 24]
       parameters:
         - name: tabela
           in: query
           required: true
-          description: ID numérico da tabela (obtido no passo anterior)
           schema:
             type: string
         - name: municipio
           in: query
           required: true
-          description: ID de 7 dígitos do município
+          [cite_start]description: ID de 7 dígitos do município [cite: 23]
           schema:
             type: string
         - name: periodos
           in: query
-          description: "Anos desejados. Use 'all' para todos ou anos separados por vírgula (ex: 2010,2022)"
+          [cite_start]description: Anos (ex: 2010 ou 'all') [cite: 21]
           schema:
             type: string
             default: "all"
         - name: variaveis
           in: query
-          description: "IDs das variáveis separadas por vírgula (ex: 100,101). Use 'allxp' para o padrão."
+          [cite_start]description: IDs das variáveis (ex: 93,100) [cite: 21]
           schema:
             type: string
             default: "allxp"
         - name: classificacoes
           in: query
-          description: "Filtros extras no formato ID:CATEGORIA. Ex: 1:all|2:123"
+          [cite_start]description: "Dicionário de filtros. Formato: ID:CAT|ID2:CAT2" [cite: 9, 22]
           schema:
             type: string
       responses:
         "200":
-          description: Sucesso. Retorna a URL para baixar o arquivo.
+          [cite_start]description: Sucesso ao gerar o arquivo Excel[cite: 15, 24].
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  status:
-                    type: string
                   download_url:
                     type: string
-                    description: URL direta para download do arquivo Excel.
-                  preview_linhas:
-                    type: integer
+                    [cite_start]description: Link direto para o usuário clicar e baixar[cite: 24].
   /download/{file_id}:
     get:
       operationId: downloadArquivo
-      summary: Endpoint final para baixar o arquivo gerado
+      [cite_start]summary: Endpoint de entrega do arquivo binário .xlsx [cite: 15]
       parameters:
         - name: file_id
           in: path
@@ -122,7 +118,7 @@ paths:
             type: string
       responses:
         "200":
-          description: O arquivo binário do Excel (.xlsx)
+          [cite_start]description: Arquivo Excel pronto para download[cite: 16].
           content:
             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
               schema:
