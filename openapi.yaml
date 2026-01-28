@@ -2,70 +2,63 @@ openapi: 3.1.0
 info:
   title: ROBÔ SIDRA IBGE - CONSULTA PREMIUM
   version: "5.6.0"
-  description: |
-    API para extração de dados do IBGE/SIDRA baseada na versão 5.6 do Robô Premium. 
-    Fluxo Obrigatório:
-    1. Listar Grupos Temáticos.
-    2. Listar Tabelas do Grupo (Exibindo ID e Nome).
-    3. Consultar Metadados (IDs de variáveis e classificações).
-    4. Buscar ID do Município (7 dígitos).
-    5. Gerar Excel e fornecer Link de Download.
+  description: API para extração técnica de dados do IBGE/SIDRA baseada na versão 5.6 do Robô Premium.
 servers:
   - url: https://sidra-api.onrender.com
 paths:
-  /municipio/buscar:
-    get:
-      operationId: buscarMunicipio
-      [cite_start]summary: Busca o ID de 7 dígitos do município pelo nome [cite: 8, 23]
-      parameters:
-        - name: nome
-          in: query
-          required: true
-          [cite_start]description: Nome do município (ex: Belo Horizonte) [cite: 24]
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Lista de municípios com ID e UF.
   /grupos:
     get:
       operationId: listarGrupos
-      [cite_start]summary: Lista os 9 grupos de análise do robô [cite: 1, 17]
+      summary: Lista os 9 grupos de análise do robô
       responses:
         "200":
           description: Retorna os nomes dos grupos temáticos.
   /grupos/{grupo_id}/tabelas:
     get:
       operationId: listarTabelasGrupo
-      [cite_start]summary: Lista as tabelas disponíveis com seus respectivos IDs [cite: 18, 19]
+      summary: Lista as tabelas disponíveis para o grupo escolhido
       parameters:
         - name: grupo_id
           in: path
           required: true
-          [cite_start]description: ID do grupo escolhido (1 a 9) [cite: 17]
           schema:
             type: string
+          description: ID do grupo escolhido (1 a 9)
       responses:
         "200":
-          description: Lista estruturada de IDs e descrições de tabelas.
+          description: Lista estruturada de IDs e nomes de tabelas.
+  /municipio/buscar:
+    get:
+      operationId: buscarMunicipio
+      summary: Busca o ID de 7 dígitos do município pelo nome
+      parameters:
+        - name: nome
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Nome do município (ex: Belo Horizonte)
+      responses:
+        "200":
+          description: Lista de municípios encontrados com ID e UF.
   /metadados/{tabela_id}:
     get:
       operationId: obterMetadados
-      [cite_start]summary: Consulta anos, variáveis e classificações detalhadas [cite: 8, 19]
+      summary: Consulta anos, variáveis e classificações detalhadas
       parameters:
         - name: tabela_id
           in: path
           required: true
-          [cite_start]description: ID numérico da tabela (ex: 3218) [cite: 1]
           schema:
             type: string
+          description: ID numérico da tabela (ex: 3218)
       responses:
         "200":
-          [cite_start]description: Metadados completos para configuração da consulta[cite: 21, 22].
+          description: Metadados completos para configuração da consulta.
   /gerar_excel:
     get:
       operationId: gerarExcel
-      [cite_start]summary: Executa o download dinâmico e gera o link do arquivo [cite: 9, 24]
+      summary: Gera os dados e retorna o link do arquivo Excel
       parameters:
         - name: tabela
           in: query
@@ -75,29 +68,27 @@ paths:
         - name: municipio
           in: query
           required: true
-          [cite_start]description: ID de 7 dígitos do município [cite: 23]
           schema:
             type: string
+          description: ID de 7 dígitos do município
         - name: periodos
           in: query
-          [cite_start]description: Anos (ex: 2010 ou 'all') [cite: 21]
           schema:
             type: string
             default: "all"
         - name: variaveis
           in: query
-          [cite_start]description: IDs das variáveis (ex: 93,100) [cite: 21]
           schema:
             type: string
             default: "allxp"
         - name: classificacoes
           in: query
-          [cite_start]description: "Dicionário de filtros. Formato: ID:CAT|ID2:CAT2" [cite: 9, 22]
           schema:
             type: string
+          description: "Filtros no formato ID:CAT1,CAT2|ID2:CAT3"
       responses:
         "200":
-          [cite_start]description: Sucesso ao gerar o arquivo Excel[cite: 15, 24].
+          description: Sucesso ao gerar o arquivo.
           content:
             application/json:
               schema:
@@ -105,11 +96,12 @@ paths:
                 properties:
                   download_url:
                     type: string
-                    [cite_start]description: Link direto para o usuário clicar e baixar[cite: 24].
+                  linhas:
+                    type: integer
   /download/{file_id}:
     get:
       operationId: downloadArquivo
-      [cite_start]summary: Endpoint de entrega do arquivo binário .xlsx [cite: 15]
+      summary: Recupera o arquivo binário gerado
       parameters:
         - name: file_id
           in: path
@@ -118,7 +110,7 @@ paths:
             type: string
       responses:
         "200":
-          [cite_start]description: Arquivo Excel pronto para download[cite: 16].
+          description: Arquivo Excel pronto para download.
           content:
             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
               schema:
