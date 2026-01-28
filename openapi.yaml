@@ -1,118 +1,96 @@
-openapi: 3.1.0
-info:
-  title: ROBÔ SIDRA IBGE - CONSULTA PREMIUM
-  version: "5.6.0"
-  description: API para extração técnica de dados do IBGE/SIDRA baseada na versão 5.6 do Robô Premium.
-servers:
-  - url: https://sidra-api.onrender.com
-paths:
-  /grupos:
-    get:
-      operationId: listarGrupos
-      summary: Lista os 9 grupos de análise do robô
-      responses:
-        "200":
-          description: Retorna os nomes dos grupos temáticos.
-  /grupos/{grupo_id}/tabelas:
-    get:
-      operationId: listarTabelasGrupo
-      summary: Lista as tabelas disponíveis para o grupo escolhido
-      parameters:
-        - name: grupo_id
-          in: path
-          required: true
-          schema:
-            type: string
-          description: ID do grupo escolhido (1 a 9)
-      responses:
-        "200":
-          description: Lista estruturada de IDs e nomes de tabelas.
-  /municipio/buscar:
-    get:
-      operationId: buscarMunicipio
-      summary: Busca o ID de 7 dígitos do município pelo nome
-      parameters:
-        - name: nome
-          in: query
-          required: true
-          schema:
-            type: string
-          description: Nome do município (ex: Belo Horizonte)
-      responses:
-        "200":
-          description: Lista de municípios encontrados com ID e UF.
-  /metadados/{tabela_id}:
-    get:
-      operationId: obterMetadados
-      summary: Consulta anos, variáveis e classificações detalhadas
-      parameters:
-        - name: tabela_id
-          in: path
-          required: true
-          schema:
-            type: string
-          description: ID numérico da tabela (ex: 3218)
-      responses:
-        "200":
-          description: Metadados completos para configuração da consulta.
-  /gerar_excel:
-    get:
-      operationId: gerarExcel
-      summary: Gera os dados e retorna o link do arquivo Excel
-      parameters:
-        - name: tabela
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: municipio
-          in: query
-          required: true
-          schema:
-            type: string
-          description: ID de 7 dígitos do município
-        - name: periodos
-          in: query
-          schema:
-            type: string
-            default: "all"
-        - name: variaveis
-          in: query
-          schema:
-            type: string
-            default: "allxp"
-        - name: classificacoes
-          in: query
-          schema:
-            type: string
-          description: "Filtros no formato ID:CAT1,CAT2|ID2:CAT3"
-      responses:
-        "200":
-          description: Sucesso ao gerar o arquivo.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  download_url:
-                    type: string
-                  linhas:
-                    type: integer
-  /download/{file_id}:
-    get:
-      operationId: downloadArquivo
-      summary: Recupera o arquivo binário gerado
-      parameters:
-        - name: file_id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Arquivo Excel pronto para download.
-          content:
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema:
-                type: string
-                format: binary
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "IBGE SIDRA GPT API",
+    "description": "API para buscar dados do IBGE SIDRA seguindo o fluxo do script original.",
+    "version": "1.1.0"
+  },
+  "servers": [
+    {
+      "url": "https://sidra-api.onrender.com"
+    }
+  ],
+  "paths": {
+    "/grupos": {
+      "get": {
+        "summary": "Listar Grupos de Análise",
+        "description": "Primeiro passo: Lista os grupos disponíveis (Saneamento, Renda, etc).",
+        "operationId": "listarGrupos",
+        "responses": {
+          "200": { "description": "Sucesso" }
+        }
+      }
+    },
+    "/grupos/{grupo_id}/tabelas": {
+      "get": {
+        "summary": "Listar Tabelas do Grupo",
+        "description": "Segundo passo: Lista as tabelas disponíveis para o grupo escolhido.",
+        "operationId": "listarTabelasGrupo",
+        "parameters": [
+          {
+            "name": "grupo_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Sucesso" }
+        }
+      }
+    },
+    "/municipio/buscar": {
+      "get": {
+        "summary": "Buscar Código do Município",
+        "description": "Transforma o nome de uma cidade no código IBGE necessário.",
+        "operationId": "buscarMunicipio",
+        "parameters": [
+          {
+            "name": "nome",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Sucesso" }
+        }
+      }
+    },
+    "/metadados/{tabela_id}": {
+      "get": {
+        "summary": "Obter Metadados e Períodos",
+        "description": "Terceiro passo: Mostra variáveis, anos disponíveis e classificações da tabela.",
+        "operationId": "obterMetadados",
+        "parameters": [
+          {
+            "name": "tabela_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Sucesso" }
+        }
+      }
+    },
+    "/gerar_excel": {
+      "get": {
+        "summary": "Gerar e Baixar Excel",
+        "description": "Passo final: Gera o arquivo Excel com os parâmetros escolhidos.",
+        "operationId": "gerarExcel",
+        "parameters": [
+          { "name": "tabela", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "municipio", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "periodos", "in": "query", "schema": { "type": "string", "default": "all" } },
+          { "name": "variaveis", "in": "query", "schema": { "type": "string", "default": "allxp" } },
+          { "name": "classificacoes", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Sucesso" }
+        }
+      }
+    }
+  }
+}
