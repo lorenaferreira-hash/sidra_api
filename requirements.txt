@@ -3,5 +3,3 @@ uvicorn
 requests
 pandas
 openpyxl
-jinja2
-python-multipart
