@@ -1,78 +1,37 @@
 openapi: 3.0.3
 info:
-  title: SIDRA API
-  version: "1.1.1"
-  description: API para buscar município, listar grupos/tabelas e gerar Excel (SIDRA/IBGE).
-
+  title: SIDRA API Corrigida
+  version: "1.2.0"
+  description: |
+    API para consulta de dados do IBGE/SIDRA. 
+    INSTRUÇÕES IMPORTANTES:
+    1. Sempre consulte '/metadados/{tabela_id}' para descobrir as variáveis agregadas (classificações).
+    2. Para incluir variáveis agregadas no Excel, use o parâmetro 'classificacoes' no formato 'cID:CAT1,CAT2|cID2:CAT3'.
+    3. O link 'download_url' deve ser exibido para o usuário como um link clicável para baixar o arquivo Excel.
 servers:
   - url: https://sidra-api.onrender.com
-
 paths:
-  /:
-    get:
-      operationId: home
-      summary: Health check
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ok
-                  msg:
-                    type: string
-                    example: IBGE SIDRA API (Flask/WSGI)
-                required: [status, msg]
-
   /municipio/buscar:
     get:
       operationId: buscarMunicipio
-      summary: Busca municípios por nome (retorna até 10)
       parameters:
         - name: nome
           in: query
           required: true
           schema:
             type: string
-          description: Nome (ou parte) do município. Ex.: Belo Horizonte
       responses:
         "200":
           description: Lista de municípios
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Municipio"
-        "500":
-          description: Erro interno
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
   /grupos:
     get:
       operationId: listarGrupos
-      summary: Lista grupos de análise
       responses:
         "200":
-          description: Objeto com id_do_grupo -> nome_do_grupo
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties:
-                  type: string
-
+          description: Grupos de tabelas
   /grupos/{grupo_id}/tabelas:
     get:
       operationId: listarTabelasGrupo
-      summary: Lista tabelas de um grupo
       parameters:
         - name: grupo_id
           in: path
@@ -81,24 +40,10 @@ paths:
             type: string
       responses:
         "200":
-          description: Objeto com id_da_tabela -> nome_da_tabela
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties:
-                  type: string
-        "404":
-          description: Grupo não encontrado
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
+          description: Tabelas do grupo
   /metadados/{tabela_id}:
     get:
       operationId: obterMetadados
-      summary: Retorna metadados simplificados de uma tabela
       parameters:
         - name: tabela_id
           in: path
@@ -107,118 +52,56 @@ paths:
             type: string
       responses:
         "200":
-          description: Metadados
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MetadadosTabela"
-        "404":
-          description: Tabela não encontrada
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Erro interno
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /periodos/{tabela_id}:
-    get:
-      operationId: obterPeriodos
-      summary: Retorna períodos disponíveis de uma tabela
-      parameters:
-        - name: tabela_id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Lista de períodos (a estrutura do IBGE pode variar)
-          content:
-            application/json:
-              schema:
-                oneOf:
-                  - type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: string
-                          example: "2022"
-                        nome:
-                          type: string
-                          example: "2022"
-                      required: [id, nome]
-                  - type: array
-                    items:
-                      type: string
-                      example: "2022"
-
+          description: Metadados e variáveis agregadas (classificações)
   /gerar_excel:
     get:
       operationId: gerarExcel
-      summary: Gera Excel com dados do SIDRA e retorna link de download
       parameters:
         - name: tabela
           in: query
           required: true
           schema:
             type: string
-          description: ID da tabela SIDRA (ex. 6579)
         - name: municipio
           in: query
           required: true
           schema:
             type: string
-          description: Código IBGE do município (ex. 3106200)
         - name: periodos
           in: query
-          required: false
           schema:
             type: string
             default: all
-          description: Ex. 2022 ou all
         - name: variaveis
           in: query
-          required: false
           schema:
             type: string
             default: allxp
-          description: Ex. 9324 ou allxp
         - name: classificacoes
           in: query
-          required: false
           schema:
             type: string
-          description: Formato c1:1,2|c2:3
+          description: "Formato: cID:CAT1,CAT2. Ex: c1:1,2|c2:0"
       responses:
         "200":
-          description: Sucesso
+          description: Link de download e preview
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GerarExcelResponse"
-        "400":
-          description: Erro de parâmetros ou sem dados
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Erro interno
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
+                type: object
+                properties:
+                  status:
+                    type: string
+                  download_url:
+                    type: string
+                    description: "URL direta para o usuário baixar o Excel"
+                  preview:
+                    type: array
+                    items:
+                      type: object
   /download/{file_id}:
     get:
       operationId: downloadArquivo
-      summary: Faz download do Excel gerado
       parameters:
         - name: file_id
           in: path
@@ -227,100 +110,9 @@ paths:
             type: string
       responses:
         "200":
-          description: Arquivo XLSX
+          description: Arquivo Excel
           content:
             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
               schema:
                 type: string
                 format: binary
-        "404":
-          description: Arquivo não encontrado
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-components:
-  schemas:
-    ErrorResponse:
-      type: object
-      properties:
-        error:
-          type: string
-      required: [error]
-
-    Municipio:
-      type: object
-      properties:
-        id:
-          type: integer
-          example: 3106200
-        nome:
-          type: string
-          example: Belo Horizonte
-        uf:
-          type: string
-          example: MG
-      required: [id, nome, uf]
-
-    MetadadosTabela:
-      type: object
-      properties:
-        id:
-          type: integer
-          example: 6579
-        nome:
-          type: string
-          example: População residente estimada
-        variaveis:
-          type: array
-          items:
-            type: object
-            properties:
-              id:
-                type: integer
-                example: 9324
-              nome:
-                type: string
-                example: População residente estimada
-            required: [id, nome]
-        classificacoes:
-          type: array
-          items:
-            type: object
-            properties:
-              id:
-                type: integer
-              nome:
-                type: string
-              categorias:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id:
-                      type: integer
-                    nome:
-                      type: string
-                  required: [id, nome]
-            required: [id, nome, categorias]
-      required: [id, nome, variaveis, classificacoes]
-
-    GerarExcelResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          example: sucesso
-        mensagem:
-          type: string
-          example: Arquivo gerado com sucesso
-        download_url:
-          type: string
-          example: https://sidra-api.onrender.com/download/6579_3106200_ab12cd34.xlsx
-        preview:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-      required: [status, mensagem, download_url, preview]
