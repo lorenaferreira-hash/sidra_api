@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: SIDRA API
-  version: "1.1.0"
+  version: "1.1.1"
   description: API para buscar município, listar grupos/tabelas e gerar Excel (SIDRA/IBGE).
 
 servers:
@@ -22,11 +22,11 @@ paths:
                 properties:
                   status:
                     type: string
+                    example: ok
                   msg:
                     type: string
-                required:
-                  - status
-                  - msg
+                    example: IBGE SIDRA API (Flask/WSGI)
+                required: [status, msg]
 
   /municipio/buscar:
     get:
@@ -47,18 +47,7 @@ paths:
               schema:
                 type: array
                 items:
-                  type: object
-                  properties:
-                    id:
-                      type: string
-                    nome:
-                      type: string
-                    uf:
-                      type: string
-                  required:
-                    - id
-                    - nome
-                    - uf
+                  $ref: "#/components/schemas/Municipio"
         "500":
           description: Erro interno
           content:
@@ -122,54 +111,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  id:
-                    type: integer
-                  nome:
-                    type: string
-                  variaveis:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: integer
-                        nome:
-                          type: string
-                      required:
-                        - id
-                        - nome
-                  classificacoes:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: integer
-                        nome:
-                          type: string
-                        categorias:
-                          type: array
-                          items:
-                            type: object
-                            properties:
-                              id:
-                                type: integer
-                              nome:
-                                type: string
-                            required:
-                              - id
-                              - nome
-                      required:
-                        - id
-                        - nome
-                        - categorias
-                required:
-                  - id
-                  - nome
-                  - variaveis
-                  - classificacoes
+                $ref: "#/components/schemas/MetadadosTabela"
         "404":
           description: Tabela não encontrada
           content:
@@ -195,13 +137,26 @@ paths:
             type: string
       responses:
         "200":
-          description: Lista de períodos (estrutura do IBGE pode variar)
+          description: Lista de períodos (a estrutura do IBGE pode variar)
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: string
+                oneOf:
+                  - type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          example: "2022"
+                        nome:
+                          type: string
+                          example: "2022"
+                      required: [id, nome]
+                  - type: array
+                    items:
+                      type: string
+                      example: "2022"
 
   /gerar_excel:
     get:
@@ -225,12 +180,14 @@ paths:
           required: false
           schema:
             type: string
+            default: all
           description: Ex. 2022 ou all
         - name: variaveis
           in: query
           required: false
           schema:
             type: string
+            default: allxp
           description: Ex. 9324 ou allxp
         - name: classificacoes
           in: query
@@ -244,24 +201,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                  mensagem:
-                    type: string
-                  download_url:
-                    type: string
-                  preview:
-                    type: array
-                    items:
-                      type: object
-                      additionalProperties: true
-                required:
-                  - status
-                  - mensagem
-                  - download_url
-                  - preview
+                $ref: "#/components/schemas/GerarExcelResponse"
         "400":
           description: Erro de parâmetros ou sem dados
           content:
@@ -307,5 +247,80 @@ components:
       properties:
         error:
           type: string
-      required:
-        - error
+      required: [error]
+
+    Municipio:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 3106200
+        nome:
+          type: string
+          example: Belo Horizonte
+        uf:
+          type: string
+          example: MG
+      required: [id, nome, uf]
+
+    MetadadosTabela:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 6579
+        nome:
+          type: string
+          example: População residente estimada
+        variaveis:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                example: 9324
+              nome:
+                type: string
+                example: População residente estimada
+            required: [id, nome]
+        classificacoes:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              nome:
+                type: string
+              categorias:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    nome:
+                      type: string
+                  required: [id, nome]
+            required: [id, nome, categorias]
+      required: [id, nome, variaveis, classificacoes]
+
+    GerarExcelResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: sucesso
+        mensagem:
+          type: string
+          example: Arquivo gerado com sucesso
+        download_url:
+          type: string
+          example: https://sidra-api.onrender.com/download/6579_3106200_ab12cd34.xlsx
+        preview:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+      required: [status, mensagem, download_url, preview]
