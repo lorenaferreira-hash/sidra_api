@@ -1,37 +1,44 @@
 openapi: 3.0.3
 info:
-  title: SIDRA API Corrigida
-  version: "1.2.0"
+  title: SIDRA IBGE API PRO
+  version: "2.0.0"
   description: |
-    API para consulta de dados do IBGE/SIDRA. 
-    INSTRUÇÕES IMPORTANTES:
-    1. Sempre consulte '/metadados/{tabela_id}' para descobrir as variáveis agregadas (classificações).
-    2. Para incluir variáveis agregadas no Excel, use o parâmetro 'classificacoes' no formato 'cID:CAT1,CAT2|cID2:CAT3'.
-    3. O link 'download_url' deve ser exibido para o usuário como um link clicável para baixar o arquivo Excel.
+    API avançada para extração de dados do IBGE/SIDRA e geração de arquivos Excel.
+    FLUXO OBRIGATÓRIO PARA O GPT:
+    1. Buscar o ID do município (7 dígitos) via `/municipio/buscar`.
+    2. Listar temas via `/grupos` e tabelas via `/grupos/{id}/tabelas`.
+    3. Obter variáveis e períodos via `/metadados/{tabela_id}`.
+    4. Gerar o Excel com os IDs numéricos coletados.
+    5. SEMPRE exibir a 'download_url' como um link clicável para o usuário.
 servers:
   - url: https://sidra-api.onrender.com
+    description: Servidor de Produção no Render
 paths:
   /municipio/buscar:
     get:
       operationId: buscarMunicipio
+      summary: Busca o código de 7 dígitos de um município pelo nome
       parameters:
         - name: nome
           in: query
           required: true
+          description: Nome do município (ex: São Paulo)
           schema:
             type: string
       responses:
         "200":
-          description: Lista de municípios
+          description: Lista de municípios encontrados com ID e UF.
   /grupos:
     get:
       operationId: listarGrupos
+      summary: Lista os grupos temáticos de análise (Saneamento, Renda, etc)
       responses:
         "200":
-          description: Grupos de tabelas
+          description: Dicionário de grupos.
   /grupos/{grupo_id}/tabelas:
     get:
       operationId: listarTabelasGrupo
+      summary: Lista as tabelas disponíveis para um grupo específico
       parameters:
         - name: grupo_id
           in: path
@@ -40,10 +47,11 @@ paths:
             type: string
       responses:
         "200":
-          description: Tabelas do grupo
+          description: Lista de IDs e nomes de tabelas.
   /metadados/{tabela_id}:
     get:
       operationId: obterMetadados
+      summary: Retorna variáveis, períodos e classificações disponíveis na tabela
       parameters:
         - name: tabela_id
           in: path
@@ -52,39 +60,44 @@ paths:
             type: string
       responses:
         "200":
-          description: Metadados e variáveis agregadas (classificações)
+          description: Metadados estruturados para configurar a consulta.
   /gerar_excel:
     get:
       operationId: gerarExcel
+      summary: Consulta o SIDRA e gera um arquivo .xlsx para download
       parameters:
         - name: tabela
           in: query
           required: true
+          description: ID numérico da tabela (obtido no passo anterior)
           schema:
             type: string
         - name: municipio
           in: query
           required: true
+          description: ID de 7 dígitos do município
           schema:
             type: string
         - name: periodos
           in: query
+          description: "Anos desejados. Use 'all' para todos ou anos separados por vírgula (ex: 2010,2022)"
           schema:
             type: string
-            default: all
+            default: "all"
         - name: variaveis
           in: query
+          description: "IDs das variáveis separadas por vírgula (ex: 100,101). Use 'allxp' para o padrão."
           schema:
             type: string
-            default: allxp
+            default: "allxp"
         - name: classificacoes
           in: query
+          description: "Filtros extras no formato ID:CATEGORIA. Ex: 1:all|2:123"
           schema:
             type: string
-          description: "Formato: cID:CAT1,CAT2. Ex: c1:1,2|c2:0"
       responses:
         "200":
-          description: Link de download e preview
+          description: Sucesso. Retorna a URL para baixar o arquivo.
           content:
             application/json:
               schema:
@@ -94,14 +107,13 @@ paths:
                     type: string
                   download_url:
                     type: string
-                    description: "URL direta para o usuário baixar o Excel"
-                  preview:
-                    type: array
-                    items:
-                      type: object
+                    description: URL direta para download do arquivo Excel.
+                  preview_linhas:
+                    type: integer
   /download/{file_id}:
     get:
       operationId: downloadArquivo
+      summary: Endpoint final para baixar o arquivo gerado
       parameters:
         - name: file_id
           in: path
@@ -110,7 +122,7 @@ paths:
             type: string
       responses:
         "200":
-          description: Arquivo Excel
+          description: O arquivo binário do Excel (.xlsx)
           content:
             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
               schema:
