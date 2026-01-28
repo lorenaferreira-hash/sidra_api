@@ -1,12 +1,33 @@
-openapi: 3.1.0
+openapi: 3.0.3
 info:
   title: SIDRA API
-  version: "1.0.0"
+  version: "1.1.0"
   description: API para buscar município, listar grupos/tabelas e gerar Excel (SIDRA/IBGE).
+
 servers:
   - url: https://sidra-api.onrender.com
 
 paths:
+  /:
+    get:
+      operationId: home
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  msg:
+                    type: string
+                required:
+                  - status
+                  - msg
+
   /municipio/buscar:
     get:
       operationId: buscarMunicipio
@@ -17,6 +38,7 @@ paths:
           required: true
           schema:
             type: string
+          description: Nome (ou parte) do município. Ex.: Belo Horizonte
       responses:
         "200":
           description: Lista de municípios
@@ -27,17 +49,30 @@ paths:
                 items:
                   type: object
                   properties:
-                    id: { type: integer }
-                    nome: { type: string }
-                    uf: { type: string }
+                    id:
+                      type: string
+                    nome:
+                      type: string
+                    uf:
+                      type: string
+                  required:
+                    - id
+                    - nome
+                    - uf
+        "500":
+          description: Erro interno
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /grupos:
     get:
       operationId: listarGrupos
-      summary: Lista os grupos de análise
+      summary: Lista grupos de análise
       responses:
         "200":
-          description: Mapa id->nome
+          description: Objeto com id_do_grupo -> nome_do_grupo
           content:
             application/json:
               schema:
@@ -48,7 +83,7 @@ paths:
   /grupos/{grupo_id}/tabelas:
     get:
       operationId: listarTabelasGrupo
-      summary: Lista as tabelas de um grupo
+      summary: Lista tabelas de um grupo
       parameters:
         - name: grupo_id
           in: path
@@ -57,18 +92,24 @@ paths:
             type: string
       responses:
         "200":
-          description: Mapa tabela_id->nome
+          description: Objeto com id_da_tabela -> nome_da_tabela
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties:
                   type: string
+        "404":
+          description: Grupo não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /metadados/{tabela_id}:
     get:
       operationId: obterMetadados
-      summary: Obtém metadados (variáveis/classificações) da tabela
+      summary: Retorna metadados simplificados de uma tabela
       parameters:
         - name: tabela_id
           in: path
@@ -82,11 +123,70 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  id:
+                    type: integer
+                  nome:
+                    type: string
+                  variaveis:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        nome:
+                          type: string
+                      required:
+                        - id
+                        - nome
+                  classificacoes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        nome:
+                          type: string
+                        categorias:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: integer
+                              nome:
+                                type: string
+                            required:
+                              - id
+                              - nome
+                      required:
+                        - id
+                        - nome
+                        - categorias
+                required:
+                  - id
+                  - nome
+                  - variaveis
+                  - classificacoes
+        "404":
+          description: Tabela não encontrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Erro interno
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /periodos/{tabela_id}:
     get:
       operationId: obterPeriodos
-      summary: Lista períodos disponíveis da tabela
+      summary: Retorna períodos disponíveis de uma tabela
       parameters:
         - name: tabela_id
           in: path
@@ -95,7 +195,7 @@ paths:
             type: string
       responses:
         "200":
-          description: Lista de períodos
+          description: Lista de períodos (estrutura do IBGE pode variar)
           content:
             application/json:
               schema:
@@ -106,52 +206,106 @@ paths:
   /gerar_excel:
     get:
       operationId: gerarExcel
-      summary: Gera Excel e retorna link de download
+      summary: Gera Excel com dados do SIDRA e retorna link de download
       parameters:
         - name: tabela
           in: query
           required: true
-          schema: { type: string }
+          schema:
+            type: string
+          description: ID da tabela SIDRA (ex. 6579)
         - name: municipio
           in: query
           required: true
-          schema: { type: string }
+          schema:
+            type: string
+          description: Código IBGE do município (ex. 3106200)
         - name: periodos
           in: query
           required: false
-          schema: { type: string, default: "all" }
+          schema:
+            type: string
+          description: Ex. 2022 ou all
         - name: variaveis
           in: query
           required: false
-          schema: { type: string, default: "allxp" }
+          schema:
+            type: string
+          description: Ex. 9324 ou allxp
         - name: classificacoes
           in: query
           required: false
-          schema: { type: string }
+          schema:
+            type: string
+          description: Formato c1:1,2|c2:3
       responses:
         "200":
-          description: Resultado com URL de download e preview
+          description: Sucesso
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  status: { type: string }
-                  mensagem: { type: string }
-                  download_url: { type: string }
+                  status:
+                    type: string
+                  mensagem:
+                    type: string
+                  download_url:
+                    type: string
                   preview:
                     type: array
-                    items: { type: object }
+                    items:
+                      type: object
+                      additionalProperties: true
+                required:
+                  - status
+                  - mensagem
+                  - download_url
+                  - preview
+        "400":
+          description: Erro de parâmetros ou sem dados
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Erro interno
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /download/{file_id}:
     get:
       operationId: downloadArquivo
-      summary: Baixa o Excel gerado
+      summary: Faz download do Excel gerado
       parameters:
         - name: file_id
           in: path
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       responses:
         "200":
-          description: Arquivo Excel
+          description: Arquivo XLSX
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Arquivo não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
