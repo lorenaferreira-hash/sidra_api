@@ -5,8 +5,10 @@ import requests
 import pandas as pd
 from typing import Optional
 from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)  # Permite que o GPT e navegadores acessem os arquivos sem erro de segurança
 
 # =========================================================
 # CONFIGURAÇÕES
@@ -15,21 +17,14 @@ SIDRA_BASE = "https://apisidra.ibge.gov.br/values"
 IBGE_META_BASE = "https://servicodados.ibge.gov.br/api/v3/agregados"
 IBGE_MUN_BASE = "https://servicodados.ibge.gov.br/api/v1/localidades/municipios"
 
-# Pastas (sempre dentro do projeto, nunca /home/ubuntu)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(BASE_DIR, "output_files")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Limpeza automática de arquivos antigos (em segundos)
-# Ex.: 2 horas => 2 * 60 * 60
 FILE_TTL_SECONDS = int(os.getenv("FILE_TTL_SECONDS", str(2 * 60 * 60)))
-
-# Timeout padrão das requisições
 REQ_TIMEOUT = int(os.getenv("REQ_TIMEOUT", "45"))
 
-# =========================================================
-# MAPEAMENTO DE GRUPOS E TABELAS (o seu mesmo)
-# =========================================================
+# Mapeamento de Grupos (Mantido o original)
 GRUPOS_ANALISE = {
     "1": {"nome": "Saneamento Básico", "tabelas": {
         "3218": "Domicílios particulares permanentes, por forma de abastecimento de água, segundo a existência de banheiro ou sanitário e esgotamento sanitário, o destino do lixo e a existência de energia elétrica",
@@ -85,26 +80,16 @@ GRUPOS_ANALISE = {
 # UTILITÁRIOS
 # =========================================================
 def limpar_input(texto) -> str:
-    if texto is None:
-        return ""
+    if texto is None: return ""
     return str(texto).replace("'", "").replace('"', "").strip()
 
 def split_csv(value: str) -> str:
-    """
-    Aceita '2022' ou '2020,2021,2022' e devolve como string sem espaços.
-    """
     value = limpar_input(value)
-    if not value:
-        return ""
+    if not value: return ""
     return ",".join([v.strip() for v in value.split(",") if v.strip()])
 
 def parse_classificacoes(classificacoes: Optional[str]) -> str:
-    """
-    Entrada: "c1:1,2|c2:3" ou "1:1,2|2:3"
-    Saída:   "/c1/1,2/c2/3"
-    """
-    if not classificacoes:
-        return ""
+    if not classificacoes: return ""
     c_url_part = ""
     parts = classificacoes.split("|")
     for p in parts:
@@ -112,53 +97,35 @@ def parse_classificacoes(classificacoes: Optional[str]) -> str:
             c_id, cats = p.split(":", 1)
             c_id = limpar_input(c_id)
             cats = limpar_input(cats)
-            if not c_id or not cats:
-                continue
+            if not c_id or not cats: continue
             c_tag = c_id if c_id.startswith("c") else f"c{c_id}"
             c_url_part += f"/{c_tag}/{cats}"
     return c_url_part
 
 def cleanup_old_files():
-    """
-    Apaga arquivos antigos do OUTPUT_DIR para não lotar o disco no Render.
-    """
     try:
         now = time.time()
         for fname in os.listdir(OUTPUT_DIR):
             fpath = os.path.join(OUTPUT_DIR, fname)
-            if not os.path.isfile(fpath):
-                continue
-            age = now - os.path.getmtime(fpath)
-            if age > FILE_TTL_SECONDS:
-                try:
-                    os.remove(fpath)
-                except:
-                    pass
-    except:
-        pass
+            if os.path.isfile(fpath) and (now - os.path.getmtime(fpath) > FILE_TTL_SECONDS):
+                os.remove(fpath)
+    except: pass
 
 def build_base_url() -> str:
-    """
-    Gera URL base correta mesmo com proxy (Render).
-    """
-    # Render geralmente seta X-Forwarded-Proto = https
-    proto = request.headers.get("X-Forwarded-Proto", request.scheme)
+    # Render usa X-Forwarded-Proto para o protocolo real
+    proto = request.headers.get("X-Forwarded-Proto", "https")
     host = request.headers.get("Host", request.host)
     return f"{proto}://{host}".rstrip("/")
-
-def sidra_values_url(tabela: str, municipio: str, variaveis: str, periodos: str, c_url_part: str) -> str:
-    return f"{SIDRA_BASE}/t/{tabela}/n6/{municipio}/v/{variaveis}/p/{periodos}{c_url_part}"
 
 def rename_columns_sidra(df: pd.DataFrame) -> pd.DataFrame:
     traducao = {
         "NC": "Nivel_Territorial_Cod", "NN": "Nivel_Territorial_Nome",
         "MC": "Unidade_Medida_Cod", "MN": "Unidade_Medida_Nome",
-        "V":  "Valor",
-        "D1C": "Municipio_Cod", "D1N": "Municipio_Nome",
-        "D2C": "Variavel_Cod",  "D2N": "Variavel_Nome",
-        "D3C": "Periodo_Cod",   "D3N": "Periodo_Nome",
+        "V":  "Valor", "D1C": "Municipio_Cod", "D1N": "Municipio_Nome",
+        "D2C": "Variavel_Cod", "D2N": "Variavel_Nome",
+        "D3C": "Periodo_Cod", "D3N": "Periodo_Nome",
     }
-    for i in range(4, 20):
+    for i in range(4, 25): # Aumentado para suportar mais classificações
         traducao[f"D{i}C"] = f"Classificacao_{i-3}_Cod"
         traducao[f"D{i}N"] = f"Classificacao_{i-3}_Nome"
     return df.rename(columns=traducao)
@@ -168,11 +135,7 @@ def rename_columns_sidra(df: pd.DataFrame) -> pd.DataFrame:
 # =========================================================
 @app.get("/")
 def home():
-    return jsonify({"status": "ok", "msg": "IBGE SIDRA API (Flask/WSGI)"}), 200
-
-@app.get("/health")
-def health():
-    return jsonify({"status": "ok"}), 200
+    return jsonify({"status": "ok", "msg": "IBGE SIDRA API Corrigida"}), 200
 
 @app.get("/grupos")
 def listar_grupos():
@@ -181,127 +144,57 @@ def listar_grupos():
 @app.get("/grupos/<grupo_id>/tabelas")
 def listar_tabelas_grupo(grupo_id):
     grupo = GRUPOS_ANALISE.get(grupo_id)
-    if not grupo:
-        return jsonify({"error": "Grupo não encontrado"}), 404
-    return jsonify(grupo["tabelas"]), 200
+    return jsonify(grupo["tabelas"]) if grupo else (jsonify({"error": "Grupo não encontrado"}), 404)
 
 @app.get("/municipio/buscar")
 def buscar_municipio():
-    nome = limpar_input(request.args.get("nome", ""))
-    if not nome:
-        return jsonify([]), 200
-
+    nome = request.args.get("nome", "").lower()
+    if not nome: return jsonify([]), 200
     try:
         r = requests.get(IBGE_MUN_BASE, timeout=15)
         r.raise_for_status()
-        municipios = r.json()
-
-        nome_busca = nome.lower()
-        resultados = []
-        for m in municipios:
-            if nome_busca in m.get("nome", "").lower():
-                resultados.append({
-                    "id": str(m.get("id")),
-                    "nome": m.get("nome"),
-                    "uf": m.get("microrregiao", {}).get("mesorregiao", {}).get("UF", {}).get("sigla", "")
-                })
-
-        return jsonify(resultados[:10]), 200
-
-    except requests.exceptions.Timeout:
-        return jsonify({"error": "Timeout ao consultar municípios (IBGE)."}), 504
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        res = [{"id": m["id"], "nome": m["nome"], "uf": m["microrregiao"]["mesorregiao"]["UF"]["sigla"]} 
+               for m in r.json() if nome in m["nome"].lower()]
+        return jsonify(res[:10]), 200
+    except Exception as e: return jsonify({"error": str(e)}), 500
 
 @app.get("/metadados/<tabela_id>")
 def obter_metadados(tabela_id):
-    tabela_id = limpar_input(tabela_id)
-    url = f"{IBGE_META_BASE}/{tabela_id}/metadados"
-
     try:
-        r = requests.get(url, timeout=15)
-        if r.status_code == 404:
-            return jsonify({"error": "Tabela não encontrada"}), 404
-        r.raise_for_status()
-
+        r = requests.get(f"{IBGE_META_BASE}/{tabela_id}/metadados", timeout=15)
+        if r.status_code == 404: return jsonify({"error": "Tabela não encontrada"}), 404
         data = r.json()
         payload = {
             "id": data.get("id"),
             "nome": data.get("nome"),
             "variaveis": [{"id": v["id"], "nome": v["nome"]} for v in data.get("variaveis", [])],
-            "classificacoes": [
-                {
-                    "id": c["id"],
-                    "nome": c["nome"],
-                    "categorias": [{"id": cat["id"], "nome": cat["nome"]} for cat in c.get("categorias", [])]
-                }
-                for c in data.get("classificacoes", [])
-            ]
+            "classificacoes": [{"id": c["id"], "nome": c["nome"], "categorias": [{"id": cat["id"], "nome": cat["nome"]} for cat in c.get("categorias", [])]} for c in data.get("classificacoes", [])]
         }
         return jsonify(payload), 200
-
-    except requests.exceptions.Timeout:
-        return jsonify({"error": "Timeout ao consultar metadados (IBGE)."}), 504
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.get("/periodos/<tabela_id>")
-def obter_periodos(tabela_id):
-    tabela_id = limpar_input(tabela_id)
-    url = f"{IBGE_META_BASE}/{tabela_id}/periodos"
-    try:
-        r = requests.get(url, timeout=10)
-        if r.status_code == 200:
-            # IBGE retorna objetos; aqui devolvemos cru mesmo (o GPT consegue ler)
-            return jsonify(r.json()), 200
-        return jsonify([]), 200
-    except:
-        return jsonify([]), 200
+    except Exception as e: return jsonify({"error": str(e)}), 500
 
 @app.get("/gerar_excel")
 def gerar_excel():
-    """
-    Exemplo:
-    /gerar_excel?tabela=6579&municipio=3106200&periodos=2022&variaveis=9324
-    """
     cleanup_old_files()
-
-    tabela = limpar_input(request.args.get("tabela", ""))
-    municipio = limpar_input(request.args.get("municipio", ""))
+    tabela = request.args.get("tabela", "")
+    municipio = request.args.get("municipio", "")
     periodos = split_csv(request.args.get("periodos", "all")) or "all"
     variaveis = split_csv(request.args.get("variaveis", "allxp")) or "allxp"
-    classificacoes = request.args.get("classificacoes")  # "c1:1,2|c2:3"
+    classificacoes = request.args.get("classificacoes", "")
 
     if not tabela or not municipio:
-        return jsonify({"error": "Parâmetros obrigatórios: tabela e municipio"}), 400
+        return jsonify({"error": "Parâmetros 'tabela' e 'municipio' são obrigatórios"}), 400
 
     c_url_part = parse_classificacoes(classificacoes)
-    url = sidra_values_url(tabela, municipio, variaveis, periodos, c_url_part)
+    url = f"{SIDRA_BASE}/t/{tabela}/n6/{municipio}/v/{variaveis}/p/{periodos}{c_url_part}"
 
     try:
         r = requests.get(url, timeout=REQ_TIMEOUT)
-
-        # Tratamento explícito de erros do SIDRA
-        if r.status_code == 400:
-            return jsonify({
-                "error": "Requisição inválida ao SIDRA (verifique tabela/variável/período/classificações).",
-                "sidra_url": url
-            }), 400
-
-        if r.status_code == 404:
-            return jsonify({
-                "error": "Recurso não encontrado no SIDRA (verifique IDs informados).",
-                "sidra_url": url
-            }), 400
-
         r.raise_for_status()
         dados_json = r.json()
 
         if not dados_json or len(dados_json) < 2:
-            msg = "A API não retornou dados."
-            if isinstance(dados_json, dict) and "message" in dados_json:
-                msg = dados_json["message"]
-            return jsonify({"error": msg, "sidra_url": url}), 400
+            return jsonify({"error": "O SIDRA não retornou dados para esta consulta.", "sidra_url": url}), 400
 
         df = pd.DataFrame(dados_json[1:], columns=dados_json[0])
         df = rename_columns_sidra(df)
@@ -310,43 +203,20 @@ def gerar_excel():
         file_path = os.path.join(OUTPUT_DIR, file_id)
         df.to_excel(file_path, index=False)
 
-        # URL ABSOLUTA (importante p/ GPT Actions)
-        base_url = build_base_url()
-        download_url = f"{base_url}/download/{file_id}"
+        download_url = f"{build_base_url()}/download/{file_id}"
 
         return jsonify({
             "status": "sucesso",
-            "mensagem": "Arquivo gerado com sucesso",
             "download_url": download_url,
-            "sidra_url": url,
-            "preview": df.head(3).to_dict(orient="records")
+            "preview": df.head(5).to_dict(orient="records")
         }), 200
-
-    except requests.exceptions.Timeout:
-        return jsonify({
-            "error": "Timeout ao consultar o SIDRA. Tente novamente ou reduza o volume (menos períodos/variáveis).",
-            "sidra_url": url
-        }), 504
-    except Exception as e:
-        return jsonify({"error": f"Erro ao processar SIDRA: {str(e)}", "sidra_url": url}), 500
+    except Exception as e: return jsonify({"error": f"Erro SIDRA: {str(e)}"}), 500
 
 @app.get("/download/<file_id>")
 def download_arquivo(file_id):
-    cleanup_old_files()
-
-    safe_name = os.path.basename(file_id)
-    file_path = os.path.join(OUTPUT_DIR, safe_name)
-
-    if not os.path.exists(file_path):
-        return jsonify({"error": "Arquivo não encontrado"}), 404
-
-    return send_file(
-        file_path,
-        as_attachment=True,
-        download_name=safe_name,
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    file_path = os.path.join(OUTPUT_DIR, os.path.basename(file_id))
+    if not os.path.exists(file_path): return jsonify({"error": "Arquivo expirado ou não encontrado"}), 404
+    return send_file(file_path, as_attachment=True, download_name=file_id)
 
 if __name__ == "__main__":
-    # Local only
-    app.run(host="0.0.0.0", port=8000, debug=True)
+    app.run(host="0.0.0.0", port=8000)
