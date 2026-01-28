@@ -8,7 +8,7 @@ from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)  # Permite que o GPT e navegadores acessem os arquivos sem erro de segurança
+CORS(app)
 
 # =========================================================
 # CONFIGURAÇÕES
@@ -17,6 +17,7 @@ SIDRA_BASE = "https://apisidra.ibge.gov.br/values"
 IBGE_META_BASE = "https://servicodados.ibge.gov.br/api/v3/agregados"
 IBGE_MUN_BASE = "https://servicodados.ibge.gov.br/api/v1/localidades/municipios"
 
+# No Render, usamos caminhos relativos ao diretório de execução
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(BASE_DIR, "output_files")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -24,61 +25,18 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 FILE_TTL_SECONDS = int(os.getenv("FILE_TTL_SECONDS", str(2 * 60 * 60)))
 REQ_TIMEOUT = int(os.getenv("REQ_TIMEOUT", "45"))
 
-# Mapeamento de Grupos (Mantido o original)
 GRUPOS_ANALISE = {
-    "1": {"nome": "Saneamento Básico", "tabelas": {
-        "3218": "Domicílios particulares permanentes, por forma de abastecimento de água, segundo a existência de banheiro ou sanitário e esgotamento sanitário, o destino do lixo e a existência de energia elétrica",
-        "9547": "Domicílios particulares permanentes, por destino do lixo",
-        "9546": "Domicílios particulares permanentes, por tipo de esgotamento sanitário",
-        "3166": "Domicílios particulares permanentes, por existência de banheiro ou sanitário e tipo de esgotamento sanitário"
-    }},
-    "2": {"nome": "Renda", "tabelas": {
-        "10315": "Rendimento médio e mediano domiciliar per capita nominal mensal",
-        "5438": "Rendimento médio mensal nominal das pessoas de 10 anos ou mais de idade",
-        "6784": "Rendimento médio mensal real das pessoas de 14 anos ou mais de idade",
-        "2499": "Domicílios com rendimento mensal domiciliar per capita abaixo da linha da pobreza"
-    }},
-    "3": {"nome": "Demografia", "tabelas": {
-        "9514": "População residente, por sexo e idade",
-        "475": "População residente por grupos de idade, sexo e situação",
-        "202": "População residente, por sexo e situação do domicílio",
-        "9923": "População residente, por situação do domicílio",
-        "197": "Nascidos vivos, por grupos de idade da mãe",
-        "2684": "Óbitos, por causas e faixas etárias",
-        "6579": "População residente estimada",
-        "1552": "População residente, por situação do domicílio e sexo, segundo a forma de declaração da idade e a idade"
-    }},
-    "4": {"nome": "Condições de Moradia", "tabelas": {
-        "9541": "Domicílios particulares permanentes, por tipo de domicílio",
-        "9539": "Domicílios particulares permanentes, por condição de ocupação",
-        "2633": "Domicílios particulares permanentes, por existência de energia elétrica",
-        "9545": "Domicílios particulares permanentes, por existência de banheiro ou sanitário"
-    }},
-    "5": {"nome": "Habitação e Urbanização", "tabelas": {
-        "2636": "Domicílios particulares permanentes, por número de pessoas por dormitório",
-        "2637": "Domicílios particulares permanentes, por existência de áreas públicas e lazer"
-    }},
-    "6": {"nome": "Educação e Qualidade de Vida", "tabelas": {
-        "1570": "Taxa de escolarização de crianças e adolescentes",
-        "1571": "Domicílios com crianças e adolescentes em idade escolar"
-    }},
-    "7": {"nome": "Segurança e Saúde", "tabelas": {
-        "5271": "Domicílios com acesso a postos de saúde ou hospitais",
-        "5272": "Domicílios com acesso a segurança pública (delegacias e bombeiros)"
-    }},
-    "8": {"nome": "Mobilidade e Transporte", "tabelas": {
-        "1266": "Domicílios com acesso a transporte público",
-        "2632": "Domicílios com acesso a vias pavimentadas e ciclovias"
-    }},
-    "9": {"nome": "Desastres e Vulnerabilidade", "tabelas": {
-        "1861": "Domicílios em áreas de risco (inundações e deslizamentos)",
-        "9923": "Variações climáticas e vulnerabilidade urbana"
-    }}
+    "1": {"nome": "Saneamento Básico", "tabelas": {"3218": "Água e Esgoto", "9547": "Lixo", "9546": "Esgoto", "3166": "Banheiro"}},
+    "2": {"nome": "Renda", "tabelas": {"10315": "Rendimento Médio", "5438": "Rendimento 10 anos+", "6784": "Rendimento Real", "2499": "Pobreza"}},
+    "3": {"nome": "Demografia", "tabelas": {"9514": "Sexo/Idade", "475": "Grupos Idade", "202": "Sexo/Situação", "9923": "Situação", "197": "Nascidos", "2684": "Óbitos", "6579": "Estimativa", "1552": "Idade Detalhada"}},
+    "4": {"nome": "Condições de Moradia", "tabelas": {"9541": "Tipo Domicílio", "9539": "Ocupação", "2633": "Energia", "9545": "Banheiro"}},
+    "5": {"nome": "Habitação e Urbanização", "tabelas": {"2636": "Pessoas/Dormitório", "2637": "Áreas Lazer"}},
+    "6": {"nome": "Educação e Qualidade de Vida", "tabelas": {"1570": "Escolarização", "1571": "Idade Escolar"}},
+    "7": {"nome": "Segurança e Saúde", "tabelas": {"5271": "Postos Saúde", "5272": "Segurança"}},
+    "8": {"nome": "Mobilidade e Transporte", "tabelas": {"1266": "Transporte Público", "2632": "Vias Pavimentadas"}},
+    "9": {"nome": "Desastres e Vulnerabilidade", "tabelas": {"1861": "Áreas Risco", "9923": "Clima"}}
 }
 
-# =========================================================
-# UTILITÁRIOS
-# =========================================================
 def limpar_input(texto) -> str:
     if texto is None: return ""
     return str(texto).replace("'", "").replace('"', "").strip()
@@ -112,7 +70,6 @@ def cleanup_old_files():
     except: pass
 
 def build_base_url() -> str:
-    # Render usa X-Forwarded-Proto para o protocolo real
     proto = request.headers.get("X-Forwarded-Proto", "https")
     host = request.headers.get("Host", request.host)
     return f"{proto}://{host}".rstrip("/")
@@ -125,17 +82,18 @@ def rename_columns_sidra(df: pd.DataFrame) -> pd.DataFrame:
         "D2C": "Variavel_Cod", "D2N": "Variavel_Nome",
         "D3C": "Periodo_Cod", "D3N": "Periodo_Nome",
     }
-    for i in range(4, 25): # Aumentado para suportar mais classificações
+    for i in range(4, 25):
         traducao[f"D{i}C"] = f"Classificacao_{i-3}_Cod"
         traducao[f"D{i}N"] = f"Classificacao_{i-3}_Nome"
     return df.rename(columns=traducao)
 
-# =========================================================
-# ROTAS
-# =========================================================
 @app.get("/")
 def home():
     return jsonify({"status": "ok", "msg": "IBGE SIDRA API Corrigida"}), 200
+
+@app.get("/health")
+def health():
+    return jsonify({"status": "ok"}), 200
 
 @app.get("/grupos")
 def listar_grupos():
@@ -219,4 +177,5 @@ def download_arquivo(file_id):
     return send_file(file_path, as_attachment=True, download_name=file_id)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    app.run(host="0.0.0.0", port=port)
