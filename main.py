@@ -17,7 +17,6 @@ SIDRA_BASE = "https://apisidra.ibge.gov.br/values"
 IBGE_META_BASE = "https://servicodados.ibge.gov.br/api/v3/agregados"
 IBGE_MUN_BASE = "https://servicodados.ibge.gov.br/api/v1/localidades/municipios"
 
-# No Render, usamos caminhos relativos ao diretório de execução
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(BASE_DIR, "output_files")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -25,8 +24,9 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 FILE_TTL_SECONDS = int(os.getenv("FILE_TTL_SECONDS", str(2 * 60 * 60)))
 REQ_TIMEOUT = int(os.getenv("REQ_TIMEOUT", "45"))
 
+# Dicionário Completo conforme sua solicitação
 GRUPOS_ANALISE = {
-     "1": {"nome": "Saneamento Básico", "tabelas": {
+    "1": {"nome": "Saneamento Básico", "tabelas": {
         "3218": "Domicílios particulares permanentes, por forma de abastecimento de água, segundo a existência de banheiro ou sanitário e esgotamento sanitário, o destino do lixo e a existência de energia elétrica",
         "9547": "Domicílios particulares permanentes, por destino do lixo",
         "9546": "Domicílios particulares permanentes, por tipo de esgotamento sanitário",
@@ -72,18 +72,13 @@ GRUPOS_ANALISE = {
     }},
     "9": {"nome": "Desastres e Vulnerabilidade", "tabelas": {
         "1861": "Domicílios em áreas de risco (inundações e deslizamentos)",
-        "9923": "Variações climáticas e vulnerabilidade urbana"
+        "9920": "Variações climáticas e vulnerabilidade urbana"
     }}
 }
 
-def limpar_input(texto) -> str:
-    if texto is None: return ""
-    return str(texto).replace("'", "").replace('"', "").strip()
-
-def split_csv(value: str) -> str:
-    value = limpar_input(value)
-    if not value: return ""
-    return ",".join([v.strip() for v in value.split(",") if v.strip()])
+# =========================================================
+# FUNÇÕES AUXILIARES
+# =========================================================
 
 def parse_classificacoes(classificacoes: Optional[str]) -> str:
     if not classificacoes: return ""
@@ -92,26 +87,11 @@ def parse_classificacoes(classificacoes: Optional[str]) -> str:
     for p in parts:
         if ":" in p:
             c_id, cats = p.split(":", 1)
-            c_id = limpar_input(c_id)
-            cats = limpar_input(cats)
+            c_id = c_id.strip().lower().replace("c", "")
+            cats = cats.strip()
             if not c_id or not cats: continue
-            c_tag = c_id if c_id.startswith("c") else f"c{c_id}"
-            c_url_part += f"/{c_tag}/{cats}"
+            c_url_part += f"/c{c_id}/{cats}"
     return c_url_part
-
-def cleanup_old_files():
-    try:
-        now = time.time()
-        for fname in os.listdir(OUTPUT_DIR):
-            fpath = os.path.join(OUTPUT_DIR, fname)
-            if os.path.isfile(fpath) and (now - os.path.getmtime(fpath) > FILE_TTL_SECONDS):
-                os.remove(fpath)
-    except: pass
-
-def build_base_url() -> str:
-    proto = request.headers.get("X-Forwarded-Proto", "https")
-    host = request.headers.get("Host", request.host)
-    return f"{proto}://{host}".rstrip("/")
 
 def rename_columns_sidra(df: pd.DataFrame) -> pd.DataFrame:
     traducao = {
@@ -121,18 +101,39 @@ def rename_columns_sidra(df: pd.DataFrame) -> pd.DataFrame:
         "D2C": "Variavel_Cod", "D2N": "Variavel_Nome",
         "D3C": "Periodo_Cod", "D3N": "Periodo_Nome",
     }
-    for i in range(4, 25):
-        traducao[f"D{i}C"] = f"Classificacao_{i-3}_Cod"
-        traducao[f"D{i}N"] = f"Classificacao_{i-3}_Nome"
-    return df.rename(columns=traducao)
+    for col in df.columns:
+        if col in traducao:
+            df = df.rename(columns={col: traducao[col]})
+    return df
+
+def cleanup_old_files():
+    try:
+        now = time.time()
+        for fname in os.listdir(OUTPUT_DIR):
+            fpath = os.path.join(OUTPUT_DIR, fname)
+            if os.path.isfile(fpath) and (now - os.path.getmtime(fpath) > FILE_TTL_SECONDS):
+                os.remove(fpath)
+    except Exception: pass
+
+# =========================================================
+# ENDPOINTS
+# =========================================================
 
 @app.get("/")
 def home():
-    return jsonify({"status": "ok", "msg": "IBGE SIDRA API Corrigida"}), 200
+    return jsonify({"status": "active", "message": "API SIDRA IBGE Operacional"}), 200
 
-@app.get("/health")
-def health():
-    return jsonify({"status": "ok"}), 200
+@app.get("/municipio/buscar")
+def buscar_municipio():
+    nome_busca = request.args.get("nome", "").lower().strip()
+    if not nome_busca: return jsonify({"error": "Informe o nome do município"}), 400
+    try:
+        r = requests.get(IBGE_MUN_BASE, timeout=15)
+        r.raise_for_status()
+        res = [{"id": m["id"], "nome": f"{m['nome']} - {m['microrregiao']['mesorregiao']['UF']['sigla']}"} 
+               for m in r.json() if nome_busca in m["nome"].lower()]
+        return jsonify(res[:15]), 200
+    except Exception as e: return jsonify({"error": f"Erro: {str(e)}"}), 500
 
 @app.get("/grupos")
 def listar_grupos():
@@ -140,20 +141,8 @@ def listar_grupos():
 
 @app.get("/grupos/<grupo_id>/tabelas")
 def listar_tabelas_grupo(grupo_id):
-    grupo = GRUPOS_ANALISE.get(grupo_id)
+    grupo = GRUPOS_ANALISE.get(str(grupo_id))
     return jsonify(grupo["tabelas"]) if grupo else (jsonify({"error": "Grupo não encontrado"}), 404)
-
-@app.get("/municipio/buscar")
-def buscar_municipio():
-    nome = request.args.get("nome", "").lower()
-    if not nome: return jsonify([]), 200
-    try:
-        r = requests.get(IBGE_MUN_BASE, timeout=15)
-        r.raise_for_status()
-        res = [{"id": m["id"], "nome": m["nome"], "uf": m["microrregiao"]["mesorregiao"]["UF"]["sigla"]} 
-               for m in r.json() if nome in m["nome"].lower()]
-        return jsonify(res[:10]), 200
-    except Exception as e: return jsonify({"error": str(e)}), 500
 
 @app.get("/metadados/<tabela_id>")
 def obter_metadados(tabela_id):
@@ -173,11 +162,11 @@ def obter_metadados(tabela_id):
 @app.get("/gerar_excel")
 def gerar_excel():
     cleanup_old_files()
-    tabela = request.args.get("tabela", "")
-    municipio = request.args.get("municipio", "")
-    periodos = split_csv(request.args.get("periodos", "all")) or "all"
-    variaveis = split_csv(request.args.get("variaveis", "allxp")) or "allxp"
-    classificacoes = request.args.get("classificacoes", "")
+    tabela = request.args.get("tabela", "").strip()
+    municipio = request.args.get("municipio", "").strip()
+    periodos = request.args.get("periodos", "all").strip()
+    variaveis = request.args.get("variaveis", "allxp").strip()
+    classificacoes = request.args.get("classificacoes", "").strip()
 
     if not tabela or not municipio:
         return jsonify({"error": "Parâmetros 'tabela' e 'municipio' são obrigatórios"}), 400
@@ -191,31 +180,36 @@ def gerar_excel():
         dados_json = r.json()
 
         if not dados_json or len(dados_json) < 2:
-            return jsonify({"error": "O SIDRA não retornou dados para esta consulta.", "sidra_url": url}), 400
+            return jsonify({"error": "SIDRA não retornou dados. Verifique metadados.", "url": url}), 400
 
         df = pd.DataFrame(dados_json[1:], columns=dados_json[0])
         df = rename_columns_sidra(df)
 
-        file_id = f"{tabela}_{municipio}_{uuid.uuid4().hex[:8]}.xlsx"
+        file_id = f"sidra_{tabela}_{uuid.uuid4().hex[:6]}.xlsx"
         file_path = os.path.join(OUTPUT_DIR, file_id)
-        df.to_excel(file_path, index=False)
+        
+        with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False)
 
-        download_url = f"{build_base_url()}/download/{file_id}"
+        # Build_base_url dinâmico para o Render
+        base_url = request.host_url.rstrip('/')
+        download_url = f"{base_url}/download/{file_id}"
 
         return jsonify({
             "status": "sucesso",
             "download_url": download_url,
-            "preview": df.head(5).to_dict(orient="records")
+            "preview_linhas": len(df)
         }), 200
-    except Exception as e: return jsonify({"error": f"Erro SIDRA: {str(e)}"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.get("/download/<file_id>")
 def download_arquivo(file_id):
     file_path = os.path.join(OUTPUT_DIR, os.path.basename(file_id))
-    if not os.path.exists(file_path): return jsonify({"error": "Arquivo expirado ou não encontrado"}), 404
-    return send_file(file_path, as_attachment=True, download_name=file_id)
+    if not os.path.exists(file_path): 
+        return "Arquivo expirado.", 404
+    return send_file(file_path, as_attachment=True)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port)
-
