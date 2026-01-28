@@ -1,0 +1,157 @@
+openapi: 3.0.3
+info:
+  title: SIDRA API
+  version: "1.0.0"
+  description: API para buscar município, listar grupos/tabelas e gerar Excel (SIDRA/IBGE).
+servers:
+  - url: https://sidra-api.onrender.com
+
+paths:
+  /municipio/buscar:
+    get:
+      operationId: buscarMunicipio
+      summary: Busca municípios por nome (retorna até 10)
+      parameters:
+        - name: nome
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista de municípios
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: integer }
+                    nome: { type: string }
+                    uf: { type: string }
+
+  /grupos:
+    get:
+      operationId: listarGrupos
+      summary: Lista os grupos de análise
+      responses:
+        "200":
+          description: Mapa id->nome
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+
+  /grupos/{grupo_id}/tabelas:
+    get:
+      operationId: listarTabelasGrupo
+      summary: Lista as tabelas de um grupo
+      parameters:
+        - name: grupo_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Mapa tabela_id->nome
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+
+  /metadados/{tabela_id}:
+    get:
+      operationId: obterMetadados
+      summary: Obtém metadados (variáveis/classificações) da tabela
+      parameters:
+        - name: tabela_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Metadados
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /periodos/{tabela_id}:
+    get:
+      operationId: obterPeriodos
+      summary: Lista períodos disponíveis da tabela
+      parameters:
+        - name: tabela_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista de períodos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  /gerar_excel:
+    get:
+      operationId: gerarExcel
+      summary: Gera Excel e retorna link de download
+      parameters:
+        - name: tabela
+          in: query
+          required: true
+          schema: { type: string }
+        - name: municipio
+          in: query
+          required: true
+          schema: { type: string }
+        - name: periodos
+          in: query
+          required: false
+          schema: { type: string, default: "all" }
+        - name: variaveis
+          in: query
+          required: false
+          schema: { type: string, default: "allxp" }
+        - name: classificacoes
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Resultado com URL de download e preview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  mensagem: { type: string }
+                  download_url: { type: string }
+                  preview:
+                    type: array
+                    items: { type: object }
+
+  /download/{file_id}:
+    get:
+      operationId: downloadArquivo
+      summary: Baixa o Excel gerado
+      parameters:
+        - name: file_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Arquivo Excel
